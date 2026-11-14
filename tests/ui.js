@@ -1,4 +1,5 @@
-/* Walks through the app like a teacher would: make an exam, enter the key, upload a photo, read the marks.
+/* Walks through the app like a teacher would: make an exam, enter the key, upload a photo, read the marks,
+   download the Excel file, look at the performance tab and the printable sheet. Opened as a file, so no sign-in.
    Run: node tests/ui.js [screenshot-dir] */
 const { chromium } = require('playwright');
 const path = require('path');
@@ -14,16 +15,17 @@ const os = require('os');
   page.on('dialog', (d) => d.accept());
   await page.goto('file://' + path.join(__dirname, '..', 'public', 'index.html'));
   const shot = async (n) => shots && page.screenshot({ path: path.join(shots, n + '.png'), fullPage: true });
-  await shot('1-sheet');
-
   // exam with 40 questions, key ABCDABCD..., minus 0.25 for wrong
-  await page.click('[data-tab=exam]');
   await page.click('#new');
   await page.fill('[data-k=name]', 'Mock Test 1'); await page.press('[data-k=name]', 'Tab');
+  await page.fill('[data-k=subject]', 'physics'); await page.press('[data-k=subject]', 'Tab');
+  await page.fill('[data-k=topics]', 'Electrostatics, Current electricity, Magnetism'); await page.press('[data-k=topics]', 'Tab');
   await page.fill('[data-k=negative]', '0.25'); await page.press('[data-k=negative]', 'Tab');
   const key = 'ABCD'.repeat(10);
   await page.fill('#keytext', key); await page.press('#keytext', 'Tab');
-  await shot('2-exam');
+  await page.waitForFunction(() => /40 of 40/.test(document.querySelector('.keycard h2').textContent));
+  await shot('1-exam-details');
+  await page.click('#det-btn');
 
   // a filled sheet: Q1-30 right, Q31-36 wrong, Q37-38 blank, Q39 two bubbles, Q40 right; class XII roll 047 set C
   const dataUrl = await page.evaluate(async (key) => {
@@ -52,36 +54,51 @@ const os = require('os');
   const file = path.join(os.tmpdir(), 'omr-ui-test.jpg');
   fs.writeFileSync(file, Buffer.from(dataUrl.split(',')[1], 'base64'));
 
-  await page.click('[data-tab=scan]');
+  await page.click('#scan-btn');
   await page.setInputFiles('#files', file);
   await page.waitForSelector('.sheetcard .score', { timeout: 60000 });
   await page.waitForFunction(() => { const i = document.querySelector('img.page'); return i && i.src.startsWith('data:'); });
   const got = await page.evaluate(() => {
     const s = OMR._state, r = s.results[s.active][0];
-    return { cls: r.cls, roll: r.roll, set: r.set, score: document.querySelector('.score').textContent.trim(), answers: r.answers.join(',') };
+    return { cls: r.cls, roll: r.roll, set: r.set, subject: s.exams[0].subject, score: document.querySelector('.score').textContent.trim(), answers: r.answers.join(',') };
   });
-  await shot('3-scan');
-  // the double-marked question asks for a decision; settle it, then change an answer from the results list
+  await shot('2-scanned');
+  // the double-marked question asks for a decision; settle it, then change an answer and undo it
   const asks = await page.locator('.decide .q').count();
   await page.click('.decide [data-keep]');
   await page.waitForFunction(() => !document.querySelector('.decide'));
-
-  await page.click('[data-tab=results]');
-  await shot('4-results');
-  await page.click('[data-open]');
-  await page.waitForSelector('.sheetcard.focus');
-  await page.click('.sheetcard details .q button[data-q="36"][data-o="A"]'); // Q37 was blank, key is A
+  await page.fill('.sheetcard [data-f=name]', 'Asha Roy'); await page.press('.sheetcard [data-f=name]', 'Tab');
+  await page.click('.sheetcard .keygrid button[data-q="36"][data-o="A"]'); // Q37 was blank, key is A
   await page.waitForFunction(() => document.querySelector('.score').textContent.includes('30.25'));
-  await page.click('.sheetcard details .q button[data-q="36"][data-o="A"]'); // undo
+  await page.click('.sheetcard .keygrid button[data-q="36"][data-o="A"]'); // undo
   await page.waitForFunction(() => document.querySelector('.score').textContent.includes('29.25'));
-  await page.click('[data-tab=results]');
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#csv')]);
-  const csv = fs.readFileSync(await dl.path(), 'utf8');
+  // the sheet folds away and comes back with its photo (kept on the device)
+  await page.click('#scan-btn');
+  await page.click('[data-open]');
+  await page.waitForFunction(() => !document.querySelector('.sheetcard'));
+  await shot('3-results');
+  await page.reload();
+  await page.click('[data-open]');
+  await page.waitForFunction(() => { const i = document.querySelector('img.page'); return i && i.src.startsWith('data:'); });
+  const row = (await page.locator('table.results tr').nth(1).innerText()).replace(/\s+/g, ' ');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#xlsx')]);
+  const xlsx = path.join(os.tmpdir(), 'omr-ui-test.xlsx');
+  await dl.saveAs(xlsx);
+
+  await page.click('[data-tab=perf]');
+  const perf = await page.locator('#view').innerText();
+  await shot('4-performance');
+  await page.click('[data-tab=exams]'); await page.click('#print-btn'); // the exam is still open
+  const sheet = await page.locator('.preview').innerHTML();
+  await shot('5-print');
 
   // without sets the exam uses key A: 31 right, 7 wrong (6 + the double), 2 blank -> 31 - 1.75 = 29.25
-  const want = { cls: 'XII', roll: '047', set: 'C', score: '29.25 / 40' };
+  const want = { cls: 'XII', roll: '047', set: 'C', score: '29.25 / 40', subject: 'Physics' };
   const fails = Object.keys(want).filter((k) => got[k] !== want[k]).map((k) => `${k}: got ${got[k]}, want ${want[k]}`);
-  if (!csv.includes('XII,047,,A,31,7,2,29.25,40')) fails.push('CSV row wrong: ' + csv.split('\r\n')[1]);
+  if (!row.includes('XII 047 Asha Roy 31 7 2 29.25 / 40 73 A')) fails.push('results row wrong: ' + row);
+  if (fs.readFileSync(xlsx).slice(0, 2).toString() !== 'PK') fails.push('Excel file is not a zip');
+  if (!/Physics/.test(perf) || !/73/.test(perf)) fails.push('performance tab does not show the Physics average');
+  if (!sheet.includes('Mock Test 1') || !sheet.includes('Electrostatics') || sheet.includes('OMR ANSWER SHEET')) fails.push('sheet heading should be the exam name and topics');
   if (asks !== 1) fails.push('expected one question needing a decision, got ' + asks);
   fails.push(...errors);
   console.log(fails.length ? 'FAIL\n  ' + fails.join('\n  ') : 'UI walk-through passed: ' + JSON.stringify(got.score));

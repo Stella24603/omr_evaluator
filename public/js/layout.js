@@ -37,7 +37,6 @@
 
   OMR.layout = function (cfg) {
     const L = { cfg, r: { cls: 2.3, set: 2.3, roll: 2.0, ans: 2.3 } };
-    L.header = { logo: { x: 12, y: 19, w: 24, h: 24 }, cx: 118 };
     L.name = { x: 12, y: 47, w: 186, h: 11 };
     L.subject = { x: 12, y: 60, w: 110, h: 11 };
     L.date = { x: 124, y: 60, w: 74, h: 11 };

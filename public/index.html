@@ -4,21 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OMR Evaluator</title>
-<meta name="theme-color" content="#b3174f">
+<meta name="theme-color" content="#1d1e3c">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="icons/favicon.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<header class="top no-print"><div class="wrap">
-  <h1>OMR Evaluator</h1>
+<header class="top no-print" id="top" hidden><div class="wrap">
+  <h1><img src="icons/favicon.png" alt="" width="26" height="26">OMR Evaluator</h1>
   <nav id="tabs">
-    <button data-tab="sheet">1. Print</button>
-    <button data-tab="exam">2. Answer key</button>
-    <button data-tab="scan">3. Scan</button>
-    <button data-tab="results">4. Results</button>
-    <button data-tab="sync">Sync <span id="syncdot" title="Sync status"></span></button>
+    <button data-tab="exams">Exams</button>
+    <button data-tab="perf">Performance</button>
+    <button data-tab="sheet">Print sheet</button>
+    <button data-tab="account">Account <span id="syncdot"></span></button>
   </nav>
 </div></header>
 <main id="view" class="no-print"></main>
@@ -26,6 +26,7 @@
 <script src="js/layout.js"></script>
 <script src="js/sheet.js"></script>
 <script src="js/scan.js"></script>
+<script src="js/xlsx.js"></script>
 <script src="js/app.js"></script>
 <script>if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');</script>
 </body>
