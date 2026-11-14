@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OMR Evaluator</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top no-print">
+  <h1>OMR Evaluator</h1>
+  <nav id="tabs">
+    <button data-tab="sheet">1. Print sheets</button>
+    <button data-tab="exam">2. Exam &amp; answer key</button>
+    <button data-tab="scan">3. Scan &amp; check</button>
+    <button data-tab="results">4. Results</button>
+  </nav>
+</header>
+<main id="view" class="no-print"></main>
+<div id="print-root"></div>
+<script src="js/layout.js"></script>
+<script src="js/sheet.js"></script>
+<script src="js/scan.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
