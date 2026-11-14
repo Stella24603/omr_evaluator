@@ -1,7 +1,5 @@
-/* Cloudflare Pages Function: keeps exams, answer keys and results the same on every device.
-   Needs two things set on the Pages project (see README):
-     - a D1 database bound as  DB
-     - a secret named          APP_PASSWORD
+/* Keeps exams, answer keys and results the same on every device.
+   Needs a D1 database bound as DB (wrangler.jsonc) and a secret named APP_PASSWORD (dashboard).
    Each record is stored whole; when two devices change the same record the later change wins. */
 let ready = false;
 
@@ -14,7 +12,7 @@ function samePass(a, b) {
   return diff === 0;
 }
 
-export async function onRequestPost({ request, env }) {
+export async function handleSync(request, env) {
   if (!env.DB || !env.APP_PASSWORD) return json({ error: 'Sync is not set up on the server yet (database or password missing).' }, 503);
   const pass = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
   if (!samePass(pass, env.APP_PASSWORD)) return json({ error: 'Wrong passcode.' }, 401);

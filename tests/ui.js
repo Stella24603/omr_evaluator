@@ -12,7 +12,7 @@ const os = require('os');
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('dialog', (d) => d.accept());
-  await page.goto('file://' + path.join(__dirname, '..', 'index.html'));
+  await page.goto('file://' + path.join(__dirname, '..', 'public', 'index.html'));
   const shot = async (n) => shots && page.screenshot({ path: path.join(shots, n + '.png'), fullPage: true });
   await shot('1-sheet');
 

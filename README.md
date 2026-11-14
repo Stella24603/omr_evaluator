@@ -6,7 +6,7 @@ them from phone photos or scans. Modelled on the WBCHSE Semester I / III sheet: 
 
 ## Use
 
-Open `index.html` in Chrome or Edge (double-click it, or host the folder anywhere). Nothing to
+Open `public/index.html` in Chrome or Edge (double-click it, or host the folder anywhere). Nothing to
 install; all data stays in that browser.
 
 1. **Print sheets** – pick institute, 35/40 questions, roll digits, set bubbles, colour; upload the logo; print on A4.
@@ -19,7 +19,7 @@ install; all data stays in that browser.
 The four black corner squares locate the page, the small squares on the top edge tell which
 sheet variant it is and which way up, the page is flattened, each bubble block is nudged onto
 its printed circles, and ink is measured in the red channel (so the pink print disappears while
-blue and black pen stay dark). Geometry lives in `js/layout.js` and is shared by the sheet
+blue and black pen stay dark). Geometry lives in `public/js/layout.js` and is shared by the sheet
 maker and the reader.
 
 ## Tests
@@ -31,15 +31,15 @@ Needs Node with Playwright.
 
 ## Hosting on Cloudflare (with sync between phone and laptop)
 
-1. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git → pick this repo.
-   Build command: empty. Build output directory: `/`. Deploy.
-2. Storage & Databases → D1 → Create database (any name, e.g. `omr`).
-3. In the Pages project → Settings → Bindings → Add → D1 database: variable name `DB`, choose the database.
-4. Settings → Variables and Secrets → Add: type Secret, name `APP_PASSWORD`, value = a passcode of your choice.
-5. Deployments → Retry deployment (bindings and secrets apply from the next deployment).
-6. Open the site on each device → **Devices** tab → enter the passcode → Turn on.
+The repo is a Cloudflare Worker: `public/` is the site, `src/worker.js` answers `/api/sync`,
+and `wrangler.jsonc` ties them to a D1 database (created automatically on the first deploy).
 
-The table is created automatically on first use. `functions/api/sync.js` is the only server code.
+1. Cloudflare dashboard → Workers & Pages → Create → import this GitHub repo. Keep the default
+   deploy command (`npx wrangler deploy`). The Worker must be named `omr-evaluator`, or change
+   `name` in `wrangler.jsonc` to match.
+2. In the Worker → Settings → Variables and Secrets → Add: type Secret, name `APP_PASSWORD`,
+   value = a passcode of your choice.
+3. Open the site on each device → **Devices** tab → enter the passcode → Turn on.
 
 Local test of sync: `echo 'APP_PASSWORD=test123' > .dev.vars`, then
-`npx wrangler pages dev . --d1 DB --port 8799` and `node tests/sync.js`.
+`npx wrangler dev --port 8799` and `node tests/sync.js`.

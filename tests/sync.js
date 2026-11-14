@@ -1,7 +1,7 @@
 /* Two "devices" (separate browser profiles) against a local Cloudflare Pages emulator.
    Start the server first:
      APP_PASSWORD is read from .dev.vars  ->  echo 'APP_PASSWORD=test123' > .dev.vars
-     npx wrangler pages dev . --d1 DB --port 8799
+     npx wrangler dev --port 8799
    Run: node tests/sync.js */
 const { chromium } = require('playwright');
 const URL = process.env.OMR_URL || 'http://localhost:8799/';

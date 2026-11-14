@@ -9,7 +9,7 @@ const path = require('path');
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.setContent('<html><body></body></html>');
-  for (const f of ['layout.js', 'sheet.js', 'scan.js']) await page.addScriptTag({ path: path.join(__dirname, '..', 'js', f) });
+  for (const f of ['layout.js', 'sheet.js', 'scan.js']) await page.addScriptTag({ path: path.join(__dirname, '..', 'public', 'js', f) });
   page.on('console', (m) => console.log('  [page]', m.text()));
 
   const out = await page.evaluate(async (trials) => {

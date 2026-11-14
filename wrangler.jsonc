@@ -1,0 +1,9 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "omr-evaluator",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./public", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  // No database id here on purpose: the first deploy creates the D1 database and links it.
+  "d1_databases": [{ "binding": "DB" }]
+}
