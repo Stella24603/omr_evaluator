@@ -2,10 +2,18 @@
 (function () {
   const OMR = (window.OMR = window.OMR || {});
 
+  // line = boxes and bubble outlines, tint = shaded rows, text = letters inside bubbles (kept light
+  // so an empty bubble never looks filled to the reader)
   const INKS = {
-    pink: { line: '#e0457b', tint: '#fdeaf1', text: '#c2185b' },
-    grey: { line: '#8c8c8c', tint: '#f2f2f2', text: '#8c8c8c' },
+    pink: { name: 'Pink', line: '#e0457b', tint: '#fdeaf1', text: '#e0457b' },
+    orange: { name: 'Orange', line: '#e8742a', tint: '#fdeee2', text: '#e8742a' },
+    red: { name: 'Red', line: '#d93a3a', tint: '#fde9e9', text: '#d93a3a' },
+    purple: { name: 'Purple', line: '#9a55c8', tint: '#f3eafa', text: '#b98bd9' },
+    blue: { name: 'Blue', line: '#3f7fc8', tint: '#e8f1fb', text: '#8fb5e0' },
+    green: { name: 'Green', line: '#2e9e5b', tint: '#e6f5ec', text: '#86c9a0' },
+    grey: { name: 'Grey (black printer)', line: '#8c8c8c', tint: '#f2f2f2', text: '#a6a6a6' },
   };
+  OMR.INKS = INKS;
   const DARK = '#1a1a1a';
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -82,7 +90,7 @@
     L.roll.forEach((col) => col.forEach((p) => o.push(bubble(p, L.r.roll, p.v))));
 
     // Question set
-    if (cfg.hasSet) {
+    if (cfg.sets) {
       o.push(rect(L.setBox), titleBar(L.setBox, '6. SET'));
       L.set.forEach((p) => {
         o.push(text(p.x - 5, p.y + 1.4, p.v, 3.8, { anchor: 'end', bold: true }));
@@ -103,7 +111,7 @@
     o.push(rect(sg), text(sg.x + 2, sg.y + 4, 'SIGNATURE OF THE TEACHER WITH DATE', 2.6, { bold: true }));
 
     // Answers
-    o.push(text(105, L.ansTitleY, (cfg.hasSet ? '7' : '6') + '. ANSWERS', 3.4, { anchor: 'middle', bold: true }));
+    o.push(text(105, L.ansTitleY, (cfg.sets ? '7' : '6') + '. ANSWERS', 3.4, { anchor: 'middle', bold: true }));
     L.blocks.forEach((b) => {
       const h = b.hh + b.rows * b.pitch;
       for (let i = 0; i < b.rows; i += 2) o.push(`<rect x="${b.x}" y="${b.y + b.hh + i * b.pitch}" width="${b.w}" height="${b.pitch}" fill="${ink.tint}"/>`);
@@ -127,7 +135,7 @@
     [
       '1. Use only a BLUE or BLACK ball point pen. Do not use pencil or gel pen.',
       '2. Darken ONE bubble completely for each question. More than one darkened bubble is treated as wrong.',
-      '3. Darken the bubbles for Class' + (cfg.hasSet ? ', Roll No. and Question Set' : ' and Roll No.') + ' carefully.',
+      '3. Darken the bubbles for Class' + (cfg.sets ? ', Roll No. and Question Set' : ' and Roll No.') + ' carefully.',
       '4. An answer once darkened cannot be changed. Do not make stray marks; do not fold or crumple the sheet.',
     ].forEach((s, i) => o.push(text(I.x + 3, I.y + 9.2 + i * 4.3, s, 2.6)));
     // right / wrong examples
