@@ -18,18 +18,33 @@
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  // logo = built-in picture, aspect = its width / height (The Logic Room's is a wide strip)
   OMR.BRANDS = {
-    logic: { name: 'THE LOGIC ROOM', mono: 'LR' },
-    ganita: { name: 'GANITASASTRAM', mono: 'G' },
+    logic: { name: 'THE LOGIC ROOM', mono: 'LR', logo: 'img/logo-logic.png', aspect: 4.18 },
+    ganita: { name: 'GANITASASTRAM', mono: 'G', logo: 'img/logo-ganita.png', aspect: 1.03 },
   };
 
-  /* opts: { brand, brandName, logo (data URL), ink, title, subject, date } */
+  // break text into at most `lines` lines of about `chars` characters; the last one is cut with "…"
+  function wrap(s, chars, lines) {
+    const out = [];
+    let cur = '';
+    String(s).trim().split(/\s+/).forEach((w) => {
+      if (!cur) cur = w;
+      else if ((cur + ' ' + w).length <= chars) cur += ' ' + w;
+      else { out.push(cur); cur = w; }
+    });
+    if (cur) out.push(cur);
+    if (out.length > lines) { out.length = lines; out[lines - 1] += ' …'; }
+    return out.map((l) => (l.length > chars + 2 ? l.slice(0, chars) + '…' : l));
+  }
+
+  /* opts: { brand, logo (data URL), logoAspect, noLogo, ink, title (exam name), topics, subject, date } */
   OMR.renderSheet = function (cfg, opts) {
     opts = opts || {};
     const L = OMR.layout(cfg);
     const ink = INKS[opts.ink] || INKS.pink;
     const brand = OMR.BRANDS[opts.brand] || OMR.BRANDS.logic;
-    const brandName = opts.brandName || brand.name;
+    const brandName = brand.name;
     const o = [];
     const rect = (b, extra) => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="${ink.line}" stroke-width="0.35" ${extra || ''}/>`;
     const text = (x, y, s, size, a) => {
@@ -54,18 +69,26 @@
       if (bit) o.push(`<rect x="${S.x0 + i * S.pitch - S.size / 2}" y="${S.y - S.size / 2}" width="${S.size}" height="${S.size}" fill="#000"/>`);
     });
 
-    // Header
-    const lg = L.header.logo;
-    if (opts.logo) {
-      o.push(`<image href="${esc(opts.logo)}" x="${lg.x}" y="${lg.y}" width="${lg.w}" height="${lg.h}" preserveAspectRatio="xMidYMid meet"/>`);
+    // Header: logo on the left (as wide as its shape needs), exam name and topics beside it
+    const logo = opts.logo || (opts.noLogo ? '' : brand.logo);
+    const asp = Math.max(0.4, opts.logo ? opts.logoAspect || 1 : brand.aspect);
+    const lw = logo ? Math.min(62, 24 * asp) : 24, lh = logo ? lw / asp : 24;
+    const lx = 12, ly = 31 - lh / 2;
+    if (logo) {
+      o.push(`<image href="${esc(logo)}" x="${lx}" y="${ly}" width="${lw}" height="${lh}" preserveAspectRatio="xMidYMid meet"/>`);
     } else {
-      const cx = lg.x + lg.w / 2, cy = lg.y + lg.h / 2;
+      const cx = lx + 12, cy = 31;
       o.push(`<circle cx="${cx}" cy="${cy}" r="11" fill="none" stroke="${DARK}" stroke-width="0.6"/><circle cx="${cx}" cy="${cy}" r="9.6" fill="none" stroke="${DARK}" stroke-width="0.25"/>`);
       o.push(text(cx, cy + 3, brand.mono, 8.5, { anchor: 'middle', bold: true }));
     }
-    o.push(text(L.header.cx, 28, brandName, 7.2, { anchor: 'middle', bold: true, ls: 0.4 }));
-    o.push(text(L.header.cx, 35.5, 'OMR ANSWER SHEET', 5, { anchor: 'middle', bold: true, ls: 0.3 }));
-    if (opts.title) o.push(text(L.header.cx, 41.5, opts.title, 3.5, { anchor: 'middle' }));
+    const hx = lx + lw + 5, hw = 198 - hx, hcx = hx + hw / 2;
+    const heading = String(opts.title || '').trim() || brandName;
+    const topics = opts.topics ? wrap(opts.topics, Math.floor(hw / 1.75), 2) : [];
+    const size = Math.max(3.6, Math.min(7.2, hw / (heading.length * 0.62)));
+    const fits = Math.floor(hw / (size * 0.62));
+    const top = 31 - (topics.length * 4.6) / 2;
+    o.push(text(hcx, top + size * 0.36, heading.length > fits ? heading.slice(0, fits - 1) + '…' : heading, size, { anchor: 'middle', bold: true, ls: 0.2 }));
+    topics.forEach((t, i) => o.push(text(hcx, top + size * 0.36 + 5.4 + i * 4.6, t, 3.5, { anchor: 'middle' })));
 
     // Hand-written fields
     const field = (b, label, value) => {
