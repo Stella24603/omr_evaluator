@@ -7,25 +7,32 @@
   OMR.MARKER = 7; // side of the black corner squares
   // Corner marker centres: top-left, top-right, bottom-right, bottom-left
   OMR.MARKERS = [[11, 11], [199, 11], [199, 286], [11, 286]];
-  // Code strip on the top edge: start, 4 data bits, parity, stop
-  OMR.STRIP = { x0: 24, pitch: 6, y: 11, size: 3.6, n: 7, paperRef: [18, 11] };
+  // Code strip on the top edge: start, 5 data bits, parity, stop
+  OMR.STRIP = { x0: 24, pitch: 6, y: 11, size: 3.6, n: 8, paperRef: [18, 11] };
   OMR.CLASSES = ['XI', 'XII'];
   OMR.SETS = ['A', 'B', 'C', 'D'];
   OMR.OPTIONS = ['A', 'B', 'C', 'D'];
+  const SET_COUNTS = [0, 2, 3, 4]; // cfg.sets: how many set bubbles the sheet has
 
   OMR.stripBits = function (cfg) {
-    const rd = cfg.rollDigits - 2;
-    const d = [cfg.questions === 40 ? 1 : 0, rd & 1, (rd >> 1) & 1, cfg.hasSet ? 1 : 0];
-    const parity = d[0] ^ d[1] ^ d[2] ^ d[3] ^ 1;
-    return [1, ...d, parity, 1];
+    const rd = cfg.rollDigits - 2, sc = Math.max(0, SET_COUNTS.indexOf(cfg.sets || 0));
+    const d = [cfg.questions === 40 ? 1 : 0, rd & 1, (rd >> 1) & 1, sc & 1, (sc >> 1) & 1];
+    return [1, ...d, d.reduce((x, y) => x ^ y, 1), 1];
   };
 
   OMR.cfgFromBits = function (b) {
-    if (!b[0] || !b[6]) return null;
-    if ((b[1] ^ b[2] ^ b[3] ^ b[4] ^ 1) !== b[5]) return null;
+    let sets;
+    if (b[7]) {
+      if (!b[0] || (b[1] ^ b[2] ^ b[3] ^ b[4] ^ b[5] ^ 1) !== b[6]) return null;
+      sets = SET_COUNTS[b[4] + 2 * b[5]];
+    } else {
+      // first version of the sheet: 7 cells, sets were either all four or none
+      if (!b[0] || !b[6] || (b[1] ^ b[2] ^ b[3] ^ b[4] ^ 1) !== b[5]) return null;
+      sets = b[4] ? 4 : 0;
+    }
     const rollDigits = 2 + b[2] + 2 * b[3];
     if (rollDigits > 4) return null;
-    return { questions: b[1] ? 40 : 35, rollDigits, hasSet: !!b[4] };
+    return { questions: b[1] ? 40 : 35, rollDigits, sets };
   };
 
   OMR.layout = function (cfg) {
@@ -53,9 +60,9 @@
 
     let tx = 78;
     L.set = [];
-    if (cfg.hasSet) {
+    if (cfg.sets) {
       L.setBox = { x: 78, y: y0, w: 24, h: sh };
-      L.set = OMR.SETS.map((v, i) => ({ v, x: 90, y: y0 + 20 + i * 11 }));
+      L.set = OMR.SETS.slice(0, cfg.sets).map((v, i) => ({ v, x: 90, y: y0 + 20 + i * 11 }));
       tx = 104;
     }
     L.teacher = { x: tx, y: y0, w: 198 - tx, h: sh };
@@ -77,16 +84,6 @@
     L.instructions = { x: 12, y: 246, w: 186, h: 26 };
     L.footerY = 278;
 
-    // Groups of bubbles that are re-aligned together when reading a photo
-    L.alignGroups = [];
-    L.alignGroups.push({ r: L.r.cls, pts: L.cls });
-    if (L.set.length) L.alignGroups.push({ r: L.r.set, pts: L.set });
-    L.alignGroups.push({ r: L.r.roll, pts: L.roll.flat() });
-    L.blocks.forEach((blk) => {
-      const pts = [];
-      for (let q = blk.first - 1; q < blk.first - 1 + blk.rows; q++) pts.push(...L.answers[q]);
-      L.alignGroups.push({ r: L.r.ans, pts });
-    });
     return L;
   };
 })();

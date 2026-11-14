@@ -27,7 +27,7 @@ const os = require('os');
 
   // a filled sheet: Q1-30 right, Q31-36 wrong, Q37-38 blank, Q39 two bubbles, Q40 right; class XII roll 047 set C
   const dataUrl = await page.evaluate(async (key) => {
-    const cfg = { questions: 40, rollDigits: 3, hasSet: true }, L = OMR.layout(cfg), PX = 8;
+    const cfg = { questions: 40, rollDigits: 3, sets: 4 }, L = OMR.layout(cfg), PX = 8;
     const img = new Image();
     img.src = URL.createObjectURL(new Blob([OMR.renderSheet(cfg, { ink: 'pink' })], { type: 'image/svg+xml' }));
     await img.decode();
@@ -61,8 +61,20 @@ const os = require('os');
     return { cls: r.cls, roll: r.roll, set: r.set, score: document.querySelector('.score').textContent.trim(), answers: r.answers.join(',') };
   });
   await shot('3-scan');
+  // the double-marked question asks for a decision; settle it, then change an answer from the results list
+  const asks = await page.locator('.decide .q').count();
+  await page.click('.decide [data-keep]');
+  await page.waitForFunction(() => !document.querySelector('.decide'));
+
   await page.click('[data-tab=results]');
   await shot('4-results');
+  await page.click('[data-open]');
+  await page.waitForSelector('.sheetcard.focus');
+  await page.click('.sheetcard details .q button[data-q="36"][data-o="A"]'); // Q37 was blank, key is A
+  await page.waitForFunction(() => document.querySelector('.score').textContent.includes('30.25'));
+  await page.click('.sheetcard details .q button[data-q="36"][data-o="A"]'); // undo
+  await page.waitForFunction(() => document.querySelector('.score').textContent.includes('29.25'));
+  await page.click('[data-tab=results]');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#csv')]);
   const csv = fs.readFileSync(await dl.path(), 'utf8');
 
@@ -70,6 +82,7 @@ const os = require('os');
   const want = { cls: 'XII', roll: '047', set: 'C', score: '29.25 / 40' };
   const fails = Object.keys(want).filter((k) => got[k] !== want[k]).map((k) => `${k}: got ${got[k]}, want ${want[k]}`);
   if (!csv.includes('XII,047,,A,31,7,2,29.25,40')) fails.push('CSV row wrong: ' + csv.split('\r\n')[1]);
+  if (asks !== 1) fails.push('expected one question needing a decision, got ' + asks);
   fails.push(...errors);
   console.log(fails.length ? 'FAIL\n  ' + fails.join('\n  ') : 'UI walk-through passed: ' + JSON.stringify(got.score));
   await browser.close();

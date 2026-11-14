@@ -11,16 +11,16 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<header class="top no-print">
+<header class="top no-print"><div class="wrap">
   <h1>OMR Evaluator</h1>
   <nav id="tabs">
-    <button data-tab="sheet">1. Print sheets</button>
-    <button data-tab="exam">2. Exam &amp; answer key</button>
-    <button data-tab="scan">3. Scan &amp; check</button>
+    <button data-tab="sheet">1. Print</button>
+    <button data-tab="exam">2. Answer key</button>
+    <button data-tab="scan">3. Scan</button>
     <button data-tab="results">4. Results</button>
-    <button data-tab="sync">Devices <span id="syncdot"></span></button>
+    <button data-tab="sync">Sync <span id="syncdot" title="Sync status"></span></button>
   </nav>
-</header>
+</div></header>
 <main id="view" class="no-print"></main>
 <div id="print-root"></div>
 <script src="js/layout.js"></script>
