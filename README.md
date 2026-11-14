@@ -28,3 +28,18 @@ Needs Node with Playwright.
 
     node tests/synthetic.js 60   # fake phone photos (tilt, rotation, curl, shadow, blur) read back
     node tests/ui.js             # walks through the app end to end
+
+## Hosting on Cloudflare (with sync between phone and laptop)
+
+1. Cloudflare dashboard → Workers & Pages → Create → Pages → Connect to Git → pick this repo.
+   Build command: empty. Build output directory: `/`. Deploy.
+2. Storage & Databases → D1 → Create database (any name, e.g. `omr`).
+3. In the Pages project → Settings → Bindings → Add → D1 database: variable name `DB`, choose the database.
+4. Settings → Variables and Secrets → Add: type Secret, name `APP_PASSWORD`, value = a passcode of your choice.
+5. Deployments → Retry deployment (bindings and secrets apply from the next deployment).
+6. Open the site on each device → **Devices** tab → enter the passcode → Turn on.
+
+The table is created automatically on first use. `functions/api/sync.js` is the only server code.
+
+Local test of sync: `echo 'APP_PASSWORD=test123' > .dev.vars`, then
+`npx wrangler pages dev . --d1 DB --port 8799` and `node tests/sync.js`.

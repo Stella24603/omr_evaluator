@@ -15,6 +15,7 @@
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(S)); }
     catch (e) { alert('Could not save: browser storage is full. Export results and clear old exams.'); }
+    queueSync();
   }
   const exam = () => S.exams.find((e) => e.id === S.active) || null;
   const resultsOf = (e) => (S.results[e.id] = S.results[e.id] || []);
@@ -56,7 +57,7 @@
   // ---------- tabs ----------
   function render() {
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
-    ({ sheet: viewSheet, exam: viewExam, scan: viewScan, results: viewResults })[S.tab]();
+    ({ sheet: viewSheet, exam: viewExam, scan: viewScan, results: viewResults, sync: viewSync })[S.tab]();
   }
   $('#tabs').addEventListener('click', (ev) => {
     const t = ev.target.dataset.tab;
@@ -385,6 +386,113 @@
     };
   }
 
+  // ---------- keeping devices in step ----------
+  // Every exam, result and the sheet settings is one record. Changed records are sent to the
+  // server and newer ones fetched; if two devices edit the same record the later edit wins.
+  const SKEY = KEY + '-sync';
+  const SY = Object.assign({ pass: '', cursor: 0, known: {}, last: 0, error: '' }, JSON.parse(localStorage.getItem(SKEY) || '{}'));
+  const saveSync = () => localStorage.setItem(SKEY, JSON.stringify(SY));
+  const hash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h + ':' + s.length; };
+  let syncTimer = null, syncing = false, again = false;
+
+  function records() {
+    const d = {};
+    S.exams.forEach((e) => (d['exam:' + e.id] = e));
+    Object.keys(S.results).forEach((eid) => S.results[eid].forEach((r) => (d['res:' + r.id] = Object.assign({ examId: eid }, r))));
+    d['config:main'] = { sheet: S.sheet, logos: S.logos };
+    return d;
+  }
+  function noteChanges(now) {
+    const t = Date.now();
+    Object.keys(now).forEach((k) => {
+      const h = hash(JSON.stringify(now[k])), kn = SY.known[k];
+      if (!kn || kn.h !== h || kn.deleted) SY.known[k] = { h, t, dirty: true };
+    });
+    Object.keys(SY.known).forEach((k) => { if (!(k in now) && !SY.known[k].deleted) SY.known[k] = { t, dirty: true, deleted: true }; });
+  }
+  function applyRemote(doc) {
+    const [kind, id] = [doc.id.slice(0, doc.id.indexOf(':')), doc.id.slice(doc.id.indexOf(':') + 1)];
+    if (kind === 'exam') {
+      S.exams = S.exams.filter((e) => e.id !== id);
+      if (!doc.deleted) S.exams.push(doc.data);
+    } else if (kind === 'res') {
+      Object.keys(S.results).forEach((eid) => (S.results[eid] = S.results[eid].filter((r) => r.id !== id)));
+      if (!doc.deleted) { const r = Object.assign({}, doc.data); delete r.examId; (S.results[doc.data.examId] = S.results[doc.data.examId] || []).push(r); }
+    } else if (kind === 'config' && !doc.deleted) { S.sheet = doc.data.sheet; S.logos = doc.data.logos || {}; }
+    SY.known[doc.id] = doc.deleted ? { t: doc.t, deleted: true } : { h: hash(JSON.stringify(kind === 'res' ? Object.assign({ examId: doc.data.examId }, doc.data) : doc.data)), t: doc.t };
+  }
+  async function call(changes, since) {
+    const res = await fetch('api/sync', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + SY.pass }, body: JSON.stringify({ since, changes }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || 'Server error ' + res.status);
+    return body;
+  }
+  async function syncNow() {
+    if (!SY.pass) return;
+    if (syncing) { again = true; return; }
+    syncing = true;
+    try {
+      let applied = 0;
+      const take = (out) => {
+        out.docs.forEach((doc) => { const kn = SY.known[doc.id]; if (!kn || doc.t > kn.t) { applyRemote(doc); applied++; } });
+        SY.cursor = out.cursor;
+      };
+      if (!SY.cursor) take(await call([], 0)); // first time on this device: fetch before sending anything
+      const now = records();
+      noteChanges(now);
+      const sent = Object.keys(SY.known).filter((k) => SY.known[k].dirty);
+      const stamp = sent.map((k) => SY.known[k].t);
+      take(await call(sent.map((k) => ({ id: k, t: SY.known[k].t, deleted: !!SY.known[k].deleted, data: now[k] })), SY.cursor));
+      sent.forEach((k, i) => { if (SY.known[k].t === stamp[i]) delete SY.known[k].dirty; });
+      SY.last = Date.now(); SY.error = '';
+      if (applied) {
+        if (!S.exams.some((e) => e.id === S.active)) S.active = S.exams.length ? S.exams[0].id : null;
+        localStorage.setItem(KEY, JSON.stringify(S));
+        const el = document.activeElement;
+        if (!(el && /^(INPUT|SELECT)$/.test(el.tagName) && el.type !== 'file')) render(); // do not redraw under someone typing
+      }
+    } catch (e) { SY.error = e.message || String(e); }
+    syncing = false;
+    saveSync(); showSync();
+    if (again) { again = false; queueSync(); }
+  }
+  function queueSync() {
+    if (!SY.pass) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncNow, 1500);
+  }
+  function showSync() {
+    const dot = $('#syncdot');
+    dot.className = !SY.pass ? '' : SY.error ? 'bad' : 'ok';
+    const st = $('#syncstate');
+    if (st) st.textContent = !SY.pass ? 'Off: data stays on this device only.' : SY.error ? 'Problem: ' + SY.error : SY.last ? 'On. Last synced ' + new Date(SY.last).toLocaleTimeString() + '.' : 'Connecting…';
+  }
+  function viewSync() {
+    $('#view').innerHTML = `<div class="card"><h2>Use on several devices</h2>
+      <p>Turn this on with the same passcode on your phone and laptop, and exams, answer keys, results and sheet settings stay the same on both. Photos of sheets are not copied; they stay on the device that scanned them.</p>
+      <p id="syncstate" class="muted"></p>
+      ${SY.pass
+        ? '<div class="row"><button class="btn primary" id="sync-now">Sync now</button><button class="btn danger" id="sync-off">Turn off on this device</button></div>'
+        : '<div class="row"><label style="flex:1;min-width:200px">Passcode<input type="password" id="sync-pass" autocomplete="current-password"></label><button class="btn primary" id="sync-on">Turn on</button></div>'}
+      <p class="muted">The passcode is the one set on the server as APP_PASSWORD. Anyone with the site address and this passcode can see student names and marks, so keep it private.</p></div>`;
+    showSync();
+    const on = $('#sync-on');
+    if (on) on.onclick = async () => {
+      SY.pass = $('#sync-pass').value.trim(); SY.cursor = 0; SY.known = {}; SY.error = '';
+      if (!SY.pass) return;
+      await syncNow();
+      if (/passcode/i.test(SY.error)) { const msg = SY.error; SY.pass = ''; saveSync(); viewSync(); $('#syncstate').textContent = msg; } else viewSync();
+    };
+    const off = $('#sync-off');
+    if (off) off.onclick = () => { SY.pass = ''; SY.cursor = 0; SY.known = {}; SY.error = ''; saveSync(); viewSync(); };
+    const nowBtn = $('#sync-now');
+    if (nowBtn) nowBtn.onclick = syncNow;
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncNow(); });
+  setInterval(() => { if (!document.hidden) syncNow(); }, 60000);
+
   OMR._state = S;
   render();
+  showSync();
+  syncNow();
 })();
